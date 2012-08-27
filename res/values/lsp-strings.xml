@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">Androzic Location Share Plugin</string>
+    <string name="on">On</string>
+    <string name="off">Off</string>
+    <string name="msg_empty_list">Nothing to display</string>
+    <string name="notif_sharing">Androzic is sharing location in real-time</string>
+    <string name="notif_error">Androzic is unable to share location</string>
+    <string name="menu_preferences">Settings</string>
+    <string name="pref_sharing_title">Location sharing</string>
+    <string name="pref_sharing_session_title">Session title</string>
+    <string name="pref_sharing_session_summary">Unique string identifying a session, it must be the same for all users in a group and must be secret to not let unwanted users join this group</string>
+    <string name="pref_sharing_user_title">User identifier</string>
+    <string name="pref_sharing_user_summary">Unique string identifying a user within a session group</string>
+    <string name="pref_sharing_updateinterval_title">Update interval</string>
+    <string name="pref_sharing_updateinterval_summary">Time interval in seconds at which location data is sent and received</string>
+    <string name="pref_sharing_timeout_title">Location timeout</string>
+    <string name="pref_sharing_timeout_summary">Time after which user will be displayed as lost</string>
+    <string name="pref_sharing_tagcolor_title">Tag color</string>
+    <string name="pref_sharing_tagwidth_title">Tag size</string>
+    <string name="pref_sharing_tagwidth_summary">The pixel size of tag marker</string>
+
+</resources>

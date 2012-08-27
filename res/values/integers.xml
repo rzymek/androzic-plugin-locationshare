@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <integer name="def_sharing_updateinterval">60</integer>
+    <integer name="def_sharing_timeout">10</integer>
+    <integer name="def_sharing_tagwidth">8</integer>
+
+</resources>
