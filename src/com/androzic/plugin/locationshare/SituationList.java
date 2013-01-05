@@ -1,9 +1,5 @@
 package com.androzic.plugin.locationshare;
 
-import com.androzic.data.Situation;
-import com.androzic.util.Geo;
-import com.androzic.util.StringFormatter;
-
 import android.app.ActivityManager;
 import android.app.ActivityManager.RunningServiceInfo;
 import android.app.ListActivity;
@@ -26,8 +22,13 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
+import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.ToggleButton;
+
+import com.androzic.data.Situation;
+import com.androzic.util.Geo;
+import com.androzic.util.StringFormatter;
 
 public class SituationList extends ListActivity implements OnSharedPreferenceChangeListener
 {
@@ -52,6 +53,7 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 
 		//TODO Check session and user are set
 		toggle = (ToggleButton) findViewById(R.id.enable_toggle);
+		toggle.setEnabled(false);
 
 		SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
 		onSharedPreferenceChanged(sharedPreferences, getString(R.string.pref_sharing_timeout));
@@ -104,6 +106,17 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 		}
 		return false;
 	}
+	
+	@Override
+	protected void onListItemClick(ListView l, View v, int position, long id)
+	{
+		Situation situation = adapter.getItem(position);
+		Log.d(TAG, "Passing coordinates to Androzic");
+		Intent i = new Intent("com.androzic.CENTER_ON_COORDINATES");
+		i.putExtra("lat", situation.latitude);
+		i.putExtra("lon", situation.longitude);
+		sendBroadcast(i);
+	}
 
 	public void onToggleEnable(View view)
 	{
@@ -116,6 +129,9 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 		{
 			disconnect();
 			stopService(new Intent(this, SharingService.class));
+			TextView title = (TextView) findViewById(R.id.title_text);
+			title.setText("");
+			adapter.notifyDataSetChanged();
 		}
 	}
 
@@ -131,9 +147,6 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 			unregisterReceiver(sharingReceiver);
 			unbindService(sharingConnection);
 			sharingService = null;
-			TextView title = (TextView) findViewById(R.id.title_text);
-			title.setText("");
-			adapter.notifyDataSetChanged();
 		}
 	}
 
@@ -142,7 +155,7 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 		ActivityManager manager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
 		for (RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE))
 		{
-			if ("com.androzic.plugin.locationshare.SharingService".equals(service.service.getClassName()))
+			if ("com.androzic.plugin.locationshare.SharingService".equals(service.service.getClassName()) && service.pid > 0)
 				return true;
 		}
 		return false;
@@ -217,7 +230,7 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 			if (sharingService != null)
 				return sharingService.situationList.get(position)._id;
 			else
-				return Integer.MIN_VALUE;
+				return Integer.MIN_VALUE + position;
 		}
 
 		@Override
@@ -267,7 +280,7 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 				text = (TextView) v.findViewById(R.id.speed);
 				if (text != null)
 				{
-					text.setText(speed);
+					text.setText(speed + " " + sharingService.speedAbbr);
 				}
 				int d = (int) ((sharingService.currentLocation.getTime() - stn.time) / 1000);
 				String delay = StringFormatter.timeHP(d, timeoutInterval);
@@ -275,6 +288,19 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 				if (text != null)
 				{
 					text.setText(delay);
+				}
+				if (stn.silent)
+				{
+					text = (TextView) v.findViewById(R.id.name);
+					text.setTextColor(text.getTextColors().withAlpha(128));
+					text = (TextView) v.findViewById(R.id.distance);
+					text.setTextColor(text.getTextColors().withAlpha(128));
+					text = (TextView) v.findViewById(R.id.track);
+					text.setTextColor(text.getTextColors().withAlpha(128));
+					text = (TextView) v.findViewById(R.id.speed);
+					text.setTextColor(text.getTextColors().withAlpha(128));
+					text = (TextView) v.findViewById(R.id.delay);
+					text.setTextColor(text.getTextColors().withAlpha(128));
 				}
 			}
 			return v;
@@ -294,6 +320,12 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 		{
 	        timeoutInterval = sharedPreferences.getInt(key, getResources().getInteger(R.integer.def_sharing_timeout)) * 60;
 		}
+
+		String session = sharedPreferences.getString(getString(R.string.pref_sharing_session), "");
+		String user = sharedPreferences.getString(getString(R.string.pref_sharing_user), "");
+		if (! session.trim().equals("") && ! user.trim().equals(""))
+			toggle.setEnabled(true);
+
 		if (adapter != null)
 			adapter.notifyDataSetChanged();
 	}

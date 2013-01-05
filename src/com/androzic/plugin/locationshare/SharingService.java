@@ -10,7 +10,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -31,14 +30,27 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
+import android.content.ContentProviderClient;
+import android.content.ContentUris;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
+import android.content.res.Resources;
+import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.Bitmap.Config;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Paint.Align;
+import android.graphics.Rect;
+import android.graphics.Typeface;
 import android.location.Location;
 import android.location.LocationManager;
+import android.net.Uri;
 import android.os.Binder;
 import android.os.IBinder;
 import android.os.RemoteException;
@@ -48,6 +60,9 @@ import android.util.Log;
 import com.androzic.data.Situation;
 import com.androzic.location.ILocationCallback;
 import com.androzic.location.ILocationRemoteService;
+import com.androzic.provider.DataContract;
+import com.androzic.provider.PreferencesContract;
+import com.androzic.util.StringFormatter;
 
 public class SharingService extends Service implements OnSharedPreferenceChangeListener
 {
@@ -66,9 +81,11 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 
 	private Notification notification;
 	private PendingIntent contentIntent;
-	
+
 	protected ThreadPoolExecutor executorThread = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>(1));
-	
+
+	private ContentProviderClient contentProvider;
+
 	Location currentLocation = new Location("fake");
 	String session;
 	String user;
@@ -76,9 +93,16 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 	private long lastShareTime = 0;
 	private int timeoutInterval = 600000; // 10 minutes (default)
 	double speedFactor = 1;
+	String speedAbbr = "m/s";
 
-	Map<String, Situation> situations;
+	private Map<String, Situation> situations;
 	List<Situation> situationList;
+
+	// Drawing resources
+	private Paint linePaint;
+	private Paint textPaint;
+	private Paint textFillPaint;
+	private int pointWidth;
 
 	@Override
 	public void onCreate()
@@ -93,6 +117,30 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 		situations = new HashMap<String, Situation>();
 		situationList = new ArrayList<Situation>();
 
+		// Connect to data provider
+		contentProvider = getContentResolver().acquireContentProviderClient(DataContract.MAPOBJECTS_URI);
+
+		// Initialize drawing resources
+		Resources resources = getResources();
+		linePaint = new Paint();
+		linePaint.setAntiAlias(false);
+		linePaint.setStrokeWidth(2);
+		linePaint.setStyle(Paint.Style.STROKE);
+		linePaint.setColor(resources.getColor(R.color.usertag));
+		textPaint = new Paint();
+		textPaint.setAntiAlias(true);
+		textPaint.setStrokeWidth(2);
+		textPaint.setStyle(Paint.Style.FILL);
+		textPaint.setTextAlign(Align.LEFT);
+		textPaint.setTextSize(20);
+		textPaint.setTypeface(Typeface.SANS_SERIF);
+		textPaint.setColor(resources.getColor(R.color.usertag));
+		textFillPaint = new Paint();
+		textFillPaint.setAntiAlias(false);
+		textFillPaint.setStrokeWidth(1);
+		textFillPaint.setStyle(Paint.Style.FILL_AND_STROKE);
+		textFillPaint.setColor(resources.getColor(R.color.usertagwithalpha));
+
 		// Inintialize preferences
 		SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
 		onSharedPreferenceChanged(sharedPreferences, getString(R.string.pref_sharing_session));
@@ -103,6 +151,8 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 		onSharedPreferenceChanged(sharedPreferences, getString(R.string.pref_sharing_tagwidth));
 		onSharedPreferenceChanged(sharedPreferences, getString(R.string.pref_sharing_timeout));
 		sharedPreferences.registerOnSharedPreferenceChangeListener(this);
+
+		readAndrozicPreferences();
 
 		// Register location service status receiver
 		registerReceiver(broadcastReceiver, new IntentFilter(BROADCAST_LOCATING_STATUS));
@@ -126,10 +176,43 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 		disconnect();
 		stopForeground(true);
 
+		// Clear data
+		clearSituations();
+
+		// Release data provider
+		contentProvider.release();
+
 		notification = null;
 		contentIntent = null;
 
 		Log.i(TAG, "Service stopped");
+	}
+
+	private void clearSituations()
+	{
+		String[] args = new String[situationList.size()];
+		int i = 0;
+		for (Situation situation : situationList)
+		{
+			args[i] = String.valueOf(situation._id);
+			i++;
+		}
+		synchronized (situations)
+		{
+			situationList.clear();
+			situations.clear();
+		}
+		// Remove situations from map
+		try
+		{
+			contentProvider.delete(DataContract.MAPOBJECTS_URI, DataContract.MAPOBJECT_ID_SELECTION, args);
+		}
+		catch (RemoteException e)
+		{
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		sendBroadcast(new Intent(BROADCAST_SITUATION_CHANGED));
 	}
 
 	protected void updateSituation(final Location loc)
@@ -142,7 +225,8 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 				URI URL;
 				try
 				{
-					String query = "session=" + URLEncoder.encode(session) + ";user=" + URLEncoder.encode(user) + ";lat=" + loc.getLatitude() + ";lon=" + loc.getLongitude() + ";track=" + loc.getBearing() + ";speed=" + loc.getSpeed() + ";ftime=" + loc.getTime();
+					String query = "session=" + URLEncoder.encode(session) + ";user=" + URLEncoder.encode(user) + ";lat=" + loc.getLatitude() + ";lon=" + loc.getLongitude() + ";track="
+							+ loc.getBearing() + ";speed=" + loc.getSpeed() + ";ftime=" + loc.getTime();
 					URL = new URI("http", null, "androzic.com", 80, "/cgi-bin/loc.cgi", query, null);
 					Log.w(TAG, "URL: " + URL.toString());
 
@@ -157,7 +241,7 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 						String responseString = out.toString();
 						JSONObject sts = new JSONObject(responseString);
 						JSONArray entries = sts.getJSONArray("users");
-						
+
 						for (int i = 0; i < entries.length(); i++)
 						{
 							JSONObject situation = entries.getJSONObject(i);
@@ -183,6 +267,8 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 						}
 						sendBroadcast(new Intent(BROADCAST_SITUATION_CHANGED));
 						lastShareTime = loc.getTime();
+
+						sendMapObjects();
 					}
 					else
 					{
@@ -210,8 +296,97 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
+				catch (RemoteException e)
+				{
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
 			}
 		});
+	}
+
+	private void sendMapObjects() throws RemoteException
+	{
+		for (Situation situation : situationList)
+		{
+			byte[] bitmap = getSituationBitmap(situation);
+			ContentValues values = new ContentValues();
+			values.put(DataContract.MAPOBJECT_COLUMNS[DataContract.MAPOBJECT_LATITUDE_COLUMN], situation.latitude);
+			values.put(DataContract.MAPOBJECT_COLUMNS[DataContract.MAPOBJECT_LONGITUDE_COLUMN], situation.longitude);
+			values.put(DataContract.MAPOBJECT_COLUMNS[DataContract.MAPOBJECT_BITMAP_COLUMN], bitmap);
+			if (situation._id == 0)
+			{
+				Uri uri = contentProvider.insert(DataContract.MAPOBJECTS_URI, values);
+				situation._id = ContentUris.parseId(uri);
+			}
+			else
+			{
+				Uri uri = ContentUris.withAppendedId(DataContract.MAPOBJECTS_URI, situation._id);
+				contentProvider.update(uri, values, null, null);
+			}
+		}
+	}
+
+	private byte[] getSituationBitmap(Situation situation)
+	{
+		Rect textRect = new Rect();
+		String tag = String.valueOf(Math.round(situation.speed * speedFactor)) + "  " + String.valueOf(Math.round(situation.track));
+		textPaint.getTextBounds(tag, 0, tag.length(), textRect);
+		Rect rect1 = new Rect();
+		textPaint.getTextBounds(situation.name, 0, situation.name.length(), rect1);
+		textRect.union(rect1);
+		int textHeight = textRect.height();
+		textRect.inset(0, -(textHeight + 3) / 2);
+		textRect.inset(-2, -2);
+		int offset = pointWidth * 3;
+		int width = textRect.width() + offset + 3;
+		int height = textRect.height() + offset + 3;
+
+		Bitmap b = Bitmap.createBitmap(width * 2, height * 2, Config.ARGB_8888);
+		Canvas bc = new Canvas(b);
+
+		linePaint.setAlpha(situation.silent ? 128 : 255);
+		textPaint.setAlpha(situation.silent ? 128 : 255);
+
+		bc.translate(width, height);
+		int half = Math.round(pointWidth / 2);
+		Rect tagRect = new Rect(-half, -half, +half, +half);
+		bc.drawRect(tagRect, linePaint);
+		bc.drawLine(0, 0, offset, -offset, linePaint);
+		textRect.offsetTo(offset + 3, -offset - textHeight * 2 - 5);
+		bc.drawRect(textRect, textFillPaint);
+		bc.drawText(tag, offset + 5, -offset, textPaint);
+		bc.drawText(situation.name, offset + 5, -offset - textHeight - 3, textPaint);
+		bc.save();
+		bc.rotate((float) situation.track, 0, 0);
+		bc.drawLine(0, 0, 0, -pointWidth * 2, linePaint);
+		bc.restore();
+
+		ByteArrayOutputStream stream = new ByteArrayOutputStream();
+		b.compress(Bitmap.CompressFormat.PNG, 100, stream);
+		return stream.toByteArray();
+	}
+
+	// This is not used in code, but included to demonstrate, how to remove
+	// single map object from Androzic map.
+	@SuppressWarnings("unused")
+	private void removeMapObject(String name)
+	{
+		Situation situation = situations.get(name);
+		situationList.remove(situation);
+		synchronized (situations)
+		{
+			situations.remove(name);
+		}
+		Uri uri = ContentUris.withAppendedId(DataContract.MAPOBJECTS_URI, situation._id);
+		try
+		{
+			contentProvider.delete(uri, null, null);
+		}
+		catch (RemoteException e)
+		{
+			e.printStackTrace();
+		}
 	}
 
 	private void connect()
@@ -296,7 +471,7 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 		 * Red icon (white): saturation +100, lightness -40 Red icon (grey):
 		 * saturation +100, lightness 0
 		 */
-//		notification.icon = R.drawable.ic_stat_sharing_error;
+		// notification.icon = R.drawable.ic_stat_sharing_error;
 		notification.setLatestEventInfo(getApplicationContext(), getText(R.string.pref_sharing_title), getText(R.string.notif_error), contentIntent);
 		NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
 		nm.notify(NOTIFICATION_ID, notification);
@@ -304,12 +479,74 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 		errorState = true;
 	}
 
+	// This is not used in code, but included to demonstrate, how to read
+	// single preference from Androzic.
+	@SuppressWarnings("unused")
+	private void readAndrozicPreference()
+	{
+		ContentProviderClient client = getContentResolver().acquireContentProviderClient(PreferencesContract.PREFERENCES_URI);
+		Uri uri = ContentUris.withAppendedId(PreferencesContract.PREFERENCES_URI, PreferencesContract.SPEED_FACTOR);
+		try
+		{
+			Cursor cursor = client.query(uri, PreferencesContract.DATA_COLUMNS, null, null, null);
+			cursor.moveToFirst();
+			double speedFactor = cursor.getDouble(PreferencesContract.DATA_COLUMN);
+		}
+		catch (RemoteException e)
+		{
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		client.release();
+	}
+
+	private void readAndrozicPreferences()
+	{
+		// Resolve content provider
+		ContentProviderClient client = getContentResolver().acquireContentProviderClient(PreferencesContract.PREFERENCES_URI);
+
+		// Setup preference items we want to read (order is important - it
+		// should correlate with the read order later in code)
+		int[] fields = new int[] { PreferencesContract.SPEED_FACTOR, PreferencesContract.SPEED_ABBREVIATION, PreferencesContract.DISTANCE_FACTOR, PreferencesContract.DISTANCE_ABBREVIATION,
+				PreferencesContract.DISTANCE_SHORT_FACTOR, PreferencesContract.DISTANCE_SHORT_ABBREVIATION };
+		// Convert them to strings
+		String[] args = new String[fields.length];
+		for (int i = 0; i < fields.length; i++)
+		{
+			args[i] = String.valueOf(fields[i]);
+		}
+		try
+		{
+			// Request data from preferences content provider
+			Cursor cursor = client.query(PreferencesContract.PREFERENCES_URI, PreferencesContract.DATA_COLUMNS, PreferencesContract.DATA_SELECTION, args, null);
+			cursor.moveToFirst();
+			speedFactor = cursor.getDouble(PreferencesContract.DATA_COLUMN);
+			cursor.moveToNext();
+			speedAbbr = cursor.getString(PreferencesContract.DATA_COLUMN);
+			cursor.moveToNext();
+			StringFormatter.distanceFactor = cursor.getDouble(PreferencesContract.DATA_COLUMN);
+			cursor.moveToNext();
+			StringFormatter.distanceAbbr = cursor.getString(PreferencesContract.DATA_COLUMN);
+			cursor.moveToNext();
+			StringFormatter.distanceShortFactor = cursor.getDouble(PreferencesContract.DATA_COLUMN);
+			cursor.moveToNext();
+			StringFormatter.distanceShortAbbr = cursor.getString(PreferencesContract.DATA_COLUMN);
+		}
+		catch (RemoteException e)
+		{
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		// Notify that the binding is not required anymore
+		client.release();
+	}
+
 	@Override
 	public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key)
 	{
 		String oldsession = session;
 		String olduser = user;
-		
+
 		if (getString(R.string.pref_sharing_session).equals(key))
 		{
 			session = sharedPreferences.getString(key, "");
@@ -320,38 +557,31 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 		}
 		else if (getString(R.string.pref_sharing_updateinterval).equals(key))
 		{
-	        updateInterval = sharedPreferences.getInt(key, getResources().getInteger(R.integer.def_sharing_updateinterval)) * 1000;
+			updateInterval = sharedPreferences.getInt(key, getResources().getInteger(R.integer.def_sharing_updateinterval)) * 1000;
 		}
 		else if (getString(R.string.pref_sharing_tagcolor).equals(key))
 		{
-//	        linePaint.setColor(settings.getInt(key, context.getResources().getColor(R.color.usertag)));
+			linePaint.setColor(sharedPreferences.getInt(key, getResources().getColor(R.color.usertag)));
 		}
 		else if (getString(R.string.pref_sharing_tagcolor).equals(key))
 		{
-//	        textPaint.setColor(settings.getInt(key, context.getResources().getColor(R.color.usertag)));
+			textPaint.setColor(sharedPreferences.getInt(key, getResources().getColor(R.color.usertag)));
 		}
 		else if (getString(R.string.pref_sharing_tagwidth).equals(key))
 		{
-//	        pointWidth = settings.getInt(key, context.getResources().getInteger(R.integer.def_sharing_tagwidth));
+			pointWidth = sharedPreferences.getInt(key, getResources().getInteger(R.integer.def_sharing_tagwidth));
 		}
 		else if (getString(R.string.pref_sharing_timeout).equals(key))
 		{
-	        timeoutInterval = sharedPreferences.getInt(key, getResources().getInteger(R.integer.def_sharing_timeout)) * 60000;
+			timeoutInterval = sharedPreferences.getInt(key, getResources().getInteger(R.integer.def_sharing_timeout)) * 60000;
 		}
 
-		if (! session.equals(oldsession) || ! user.equals(olduser))
-        {
-			synchronized (situations)
-			{
-				situations.clear();
-				situationList.clear();
-			}
-        }
-        //FIXME should halt if any string is empty
-
-        //TODO Get this from parent Application
-		//int speedIdx = Integer.parseInt(settings.getString(context.getString(R.string.pref_unitspeed), "0"));
-		//speedFactor = Double.parseDouble(context.getResources().getStringArray(R.array.speed_factors)[speedIdx]);
+		if (!session.equals(oldsession) || !user.equals(olduser))
+		{
+			clearSituations();
+		}
+		if ((session != null && session.trim().equals("")) || (user != null && user.trim().equals("")))
+			stopSelf();
 	}
 
 	private final IBinder binder = new LocalBinder();
