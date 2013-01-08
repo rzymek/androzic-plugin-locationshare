@@ -1,5 +1,8 @@
 package com.androzic.plugin.locationshare;
 
+import java.util.Timer;
+import java.util.TimerTask;
+
 import android.app.ActivityManager;
 import android.app.ActivityManager.RunningServiceInfo;
 import android.app.ListActivity;
@@ -37,7 +40,8 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 	private SituationListAdapter adapter;
 	public SharingService sharingService = null;
 
-	private int timeoutInterval = 600; // 10 minutes (default)
+	private Timer timer;
+	// private int timeoutInterval = 600; // 10 minutes (default)
 
 	private ToggleButton toggle;
 
@@ -51,12 +55,12 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 		if (emptyView != null)
 			emptyView.setText(R.string.msg_empty_list);
 
-		//TODO Check session and user are set
+		// TODO Check session and user are set
 		toggle = (ToggleButton) findViewById(R.id.enable_toggle);
 		toggle.setEnabled(false);
 
 		SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
-		onSharedPreferenceChanged(sharedPreferences, getString(R.string.pref_sharing_timeout));
+		onSharedPreferenceChanged(sharedPreferences, null);
 		sharedPreferences.registerOnSharedPreferenceChangeListener(this);
 
 		adapter = new SituationListAdapter(this);
@@ -106,7 +110,7 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 		}
 		return false;
 	}
-	
+
 	@Override
 	protected void onListItemClick(ListView l, View v, int position, long id)
 	{
@@ -138,6 +142,9 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 	private void connect()
 	{
 		bindService(new Intent(this, SharingService.class), sharingConnection, 0);
+		timer = new Timer();
+		TimerTask updateTask = new UpdateTask();
+		timer.scheduleAtFixedRate(updateTask, 1000, 1000);
 	}
 
 	private void disconnect()
@@ -147,6 +154,11 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 			unregisterReceiver(sharingReceiver);
 			unbindService(sharingConnection);
 			sharingService = null;
+		}
+		if (timer != null)
+		{
+			timer.cancel();
+			timer = null;
 		}
 	}
 
@@ -253,6 +265,7 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 			else
 			{
 				v = convertView;
+				// TODO Have to utilize view
 				v = mInflater.inflate(mItemLayout, parent, false);
 			}
 			Situation stn = getItem(position);
@@ -263,8 +276,15 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 				{
 					text.setText(stn.name);
 				}
-				double dist = Geo.distance(stn.latitude, stn.longitude, sharingService.currentLocation.getLatitude(), sharingService.currentLocation.getLongitude());
-				String distance = StringFormatter.distanceH(dist);
+				String distance = "";
+				synchronized (sharingService.currentLocation)
+				{
+					if (!"fake".equals(sharingService.currentLocation.getProvider()))
+					{
+						double dist = Geo.distance(stn.latitude, stn.longitude, sharingService.currentLocation.getLatitude(), sharingService.currentLocation.getLongitude());
+						distance = StringFormatter.distanceH(dist);
+					}
+				}
 				text = (TextView) v.findViewById(R.id.distance);
 				if (text != null)
 				{
@@ -282,8 +302,8 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 				{
 					text.setText(speed + " " + sharingService.speedAbbr);
 				}
-				int d = (int) ((sharingService.currentLocation.getTime() - stn.time) / 1000);
-				String delay = StringFormatter.timeHP(d, timeoutInterval);
+				int d = (int) ((System.currentTimeMillis() - sharingService.timeCorrection - stn.time) / 1000);
+				String delay = StringFormatter.timeHP(d, sharingService.timeoutInterval / 1000);
 				text = (TextView) v.findViewById(R.id.delay);
 				if (text != null)
 				{
@@ -316,17 +336,26 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 	@Override
 	public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key)
 	{
-		if (getString(R.string.pref_sharing_timeout).equals(key))
-		{
-	        timeoutInterval = sharedPreferences.getInt(key, getResources().getInteger(R.integer.def_sharing_timeout)) * 60;
-		}
-
 		String session = sharedPreferences.getString(getString(R.string.pref_sharing_session), "");
 		String user = sharedPreferences.getString(getString(R.string.pref_sharing_user), "");
-		if (! session.trim().equals("") && ! user.trim().equals(""))
+		if (!session.trim().equals("") && !user.trim().equals(""))
 			toggle.setEnabled(true);
 
 		if (adapter != null)
 			adapter.notifyDataSetChanged();
+	}
+
+	class UpdateTask extends TimerTask
+	{
+		public void run()
+		{
+			runOnUiThread(new Runnable() {
+				public void run()
+				{
+					if (adapter != null)
+						adapter.notifyDataSetChanged();
+				}
+			});
+		}
 	}
 }

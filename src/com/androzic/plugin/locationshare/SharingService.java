@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -82,7 +84,8 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 	private Notification notification;
 	private PendingIntent contentIntent;
 
-	protected ThreadPoolExecutor executorThread = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>(1));
+	ThreadPoolExecutor executorThread = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>(1));
+	private Timer timer;
 
 	private ContentProviderClient contentProvider;
 
@@ -90,8 +93,8 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 	String session;
 	String user;
 	private int updateInterval = 10000; // 10 seconds (default)
-	private long lastShareTime = 0;
-	private int timeoutInterval = 600000; // 10 minutes (default)
+	int timeoutInterval = 600000; // 10 minutes (default)
+	long timeCorrection = 0;
 	double speedFactor = 1;
 	String speedAbbr = "m/s";
 
@@ -175,6 +178,7 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 		unregisterReceiver(broadcastReceiver);
 		disconnect();
 		stopForeground(true);
+		stopTimer();
 
 		// Clear data
 		clearSituations();
@@ -215,7 +219,7 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 		sendBroadcast(new Intent(BROADCAST_SITUATION_CHANGED));
 	}
 
-	protected void updateSituation(final Location loc)
+	protected void updateSituations()
 	{
 		notification.icon = R.drawable.ic_stat_sharing_out;
 		final NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
@@ -227,10 +231,15 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 			{
 				Log.e(TAG, "updateSituation");
 				URI URL;
+				boolean updated = false;
 				try
 				{
-					String query = "session=" + URLEncoder.encode(session) + ";user=" + URLEncoder.encode(user) + ";lat=" + loc.getLatitude() + ";lon=" + loc.getLongitude() + ";track="
-							+ loc.getBearing() + ";speed=" + loc.getSpeed() + ";ftime=" + loc.getTime();
+					String query = null;
+					synchronized (currentLocation)
+					{
+						query = "session=" + URLEncoder.encode(session) + ";user=" + URLEncoder.encode(user) + ";lat=" + currentLocation.getLatitude() + ";lon=" + currentLocation.getLongitude()
+								+ ";track=" + currentLocation.getBearing() + ";speed=" + currentLocation.getSpeed() + ";ftime=" + currentLocation.getTime();
+					}
 					URL = new URI("http", null, "androzic.com", 80, "/cgi-bin/loc.cgi", query, null);
 					Log.w(TAG, "URL: " + URL.toString());
 
@@ -268,13 +277,9 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 								s.speed = situation.getDouble("speed");
 								s.track = situation.getDouble("track");
 								s.time = situation.getLong("ftime");
-								s.silent = s.time + timeoutInterval < loc.getTime();
 							}
 						}
-						sendBroadcast(new Intent(BROADCAST_SITUATION_CHANGED));
-						lastShareTime = loc.getTime();
-
-						sendMapObjects();
+						updated = true;
 					}
 					else
 					{
@@ -302,11 +307,29 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
+
+				synchronized (situations)
+				{
+					long curTime = System.currentTimeMillis() - timeCorrection;
+					for (Situation situation : situations.values())
+					{
+						situation.silent = situation.time + timeoutInterval < curTime;
+					}
+				}
+
+				if (updated)
+					sendBroadcast(new Intent(BROADCAST_SITUATION_CHANGED));
+
+				try
+				{
+					sendMapObjects();
+				}
 				catch (RemoteException e)
 				{
 					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
+
 				notification.icon = R.drawable.ic_stat_sharing;
 				nm.notify(NOTIFICATION_ID, notification);
 			}
@@ -418,6 +441,22 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 		}
 	}
 
+	private void startTimer()
+	{
+		if (timer != null)
+			stopTimer();
+
+		timer = new Timer();
+		TimerTask updateTask = new UpdateSituationsTask();
+		timer.scheduleAtFixedRate(updateTask, 0, updateInterval);
+	}
+
+	private void stopTimer()
+	{
+		timer.cancel();
+		timer = null;
+	}
+
 	private void doStart()
 	{
 		if (isSuspended)
@@ -425,6 +464,7 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 			if (sharingEnabled)
 			{
 				startForeground(NOTIFICATION_ID, notification);
+				startTimer();
 			}
 			isSuspended = false;
 		}
@@ -454,6 +494,7 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 				else if (sharingEnabled)
 				{
 					stopForeground(true);
+					stopTimer();
 					isSuspended = true;
 				}
 			}
@@ -566,6 +607,11 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 		else if (getString(R.string.pref_sharing_updateinterval).equals(key))
 		{
 			updateInterval = sharedPreferences.getInt(key, getResources().getInteger(R.integer.def_sharing_updateinterval)) * 1000;
+			if (timer != null)
+			{
+				stopTimer();
+				startTimer();
+			}
 		}
 		else if (getString(R.string.pref_sharing_tagcolor).equals(key))
 		{
@@ -651,10 +697,10 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 		public void onLocationChanged(Location loc, boolean continous, boolean geoid, float smoothspeed, float avgspeed)
 		{
 			Log.d(TAG, "Location arrived");
-			currentLocation.set(loc);
-			if (loc.getTime() - lastShareTime > updateInterval)
+			synchronized (currentLocation)
 			{
-				updateSituation(loc);
+				currentLocation.set(loc);
+				timeCorrection = System.currentTimeMillis() - currentLocation.getTime();
 			}
 		}
 
@@ -679,4 +725,11 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 		}
 	};
 
+	class UpdateSituationsTask extends TimerTask
+	{
+		public void run()
+		{
+			updateSituations();
+		}
+	}
 }
