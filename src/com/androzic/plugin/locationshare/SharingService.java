@@ -217,6 +217,10 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 
 	protected void updateSituation(final Location loc)
 	{
+		notification.icon = R.drawable.ic_stat_sharing_out;
+		final NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+		nm.notify(NOTIFICATION_ID, notification);
+
 		executorThread.getQueue().poll();
 		executorThread.execute(new Runnable() {
 			public void run()
@@ -232,6 +236,8 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 
 					HttpClient httpclient = new DefaultHttpClient();
 					HttpResponse response = httpclient.execute(new HttpGet(URL));
+					notification.icon = R.drawable.ic_stat_sharing_in;
+					nm.notify(NOTIFICATION_ID, notification);
 					StatusLine statusLine = response.getStatusLine();
 					if (statusLine.getStatusCode() == HttpStatus.SC_OK)
 					{
@@ -301,6 +307,8 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
+				notification.icon = R.drawable.ic_stat_sharing;
+				nm.notify(NOTIFICATION_ID, notification);
 			}
 		});
 	}
