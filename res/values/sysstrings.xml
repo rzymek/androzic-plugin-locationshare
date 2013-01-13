@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-	<string name="pref_sharing_session">sharing_session</string>
-	<string name="pref_sharing_user">sharing_user</string>
-	<string name="pref_sharing_updateinterval">sharing_updateinterval</string>
-	<string name="pref_sharing_timeout">sharing_timeout</string>
-	<string name="pref_sharing_tagcolor">sharing_tagcolor</string>
-	<string name="pref_sharing_tagwidth">sharing_tagwidth</string>
+	<string name="pref_sharing_session" translatable="false">sharing_session</string>
+	<string name="pref_sharing_user" translatable="false">sharing_user</string>
+	<string name="pref_sharing_updateinterval" translatable="false">sharing_updateinterval</string>
+	<string name="pref_sharing_timeout" translatable="false">sharing_timeout</string>
+	<string name="pref_sharing_tagcolor" translatable="false">sharing_tagcolor</string>
+	<string name="pref_sharing_tagwidth" translatable="false">sharing_tagwidth</string>
 </resources>
