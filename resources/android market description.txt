@@ -1,0 +1,5 @@
+<b>This is an Androzic plugin.</b> It requires Androzic to be installed. It enables location sharing with other Androzic users in real time. Requires Androzic version 1.7 or higher.
+
+Locations are shared within a group (session). Locations are stored on a dedicated server so your device must provide data connectivity (e.g. GPRS or Wi-Fi).
+
+All locations are stored on server for 24 hours (cleaned hourly).
