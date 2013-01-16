@@ -718,11 +718,6 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 		public void onProviderEnabled(String provider)
 		{
 		}
-
-		@Override
-		public void onSensorChanged(float azimuth, float pitch, float roll)
-		{
-		}
 	};
 
 	class UpdateSituationsTask extends TimerTask
