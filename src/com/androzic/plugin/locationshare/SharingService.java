@@ -60,6 +60,7 @@ import android.preference.PreferenceManager;
 import android.util.Log;
 
 import com.androzic.data.Situation;
+import com.androzic.location.BaseLocationService;
 import com.androzic.location.ILocationCallback;
 import com.androzic.location.ILocationRemoteService;
 import com.androzic.provider.DataContract;
@@ -72,8 +73,6 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 	private static final int NOTIFICATION_ID = 24164;
 
 	public static final String BROADCAST_SITUATION_CHANGED = "com.androzic.sharingSituationChanged";
-	// TODO Should import it from LocationService
-	private static final String BROADCAST_LOCATING_STATUS = "com.androzic.locatingStatusChanged";
 
 	private ILocationRemoteService locationService = null;
 
@@ -158,7 +157,7 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 		readAndrozicPreferences();
 
 		// Register location service status receiver
-		registerReceiver(broadcastReceiver, new IntentFilter(BROADCAST_LOCATING_STATUS));
+		registerReceiver(broadcastReceiver, new IntentFilter(BaseLocationService.BROADCAST_LOCATING_STATUS));
 
 		// Connect to location service
 		prepareNormalNotification();
@@ -476,7 +475,7 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 		{
 			String action = intent.getAction();
 			Log.e(TAG, "Broadcast: " + action);
-			if (action.equals(BROADCAST_LOCATING_STATUS))
+			if (action.equals(BaseLocationService.BROADCAST_LOCATING_STATUS))
 			{
 				boolean isLocating = false;
 				try
