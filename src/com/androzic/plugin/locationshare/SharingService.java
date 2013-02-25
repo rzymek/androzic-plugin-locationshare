@@ -228,7 +228,7 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 		executorThread.execute(new Runnable() {
 			public void run()
 			{
-				Log.e(TAG, "updateSituation");
+				Log.d(TAG, "updateSituation");
 				URI URL;
 				boolean updated = false;
 				try
@@ -240,7 +240,6 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 								+ ";track=" + currentLocation.getBearing() + ";speed=" + currentLocation.getSpeed() + ";ftime=" + currentLocation.getTime();
 					}
 					URL = new URI("http", null, "androzic.com", 80, "/cgi-bin/loc.cgi", query, null);
-					Log.w(TAG, "URL: " + URL.toString());
 
 					HttpClient httpclient = new DefaultHttpClient();
 					HttpResponse response = httpclient.execute(new HttpGet(URL));
@@ -341,14 +340,19 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 		{
 			byte[] bitmap = getSituationBitmap(situation);
 			ContentValues values = new ContentValues();
+			// Name is not required if bitmap is used, but we need it for navigation service.
+			// See SituationList for navigation initiation code.
+			values.put(DataContract.MAPOBJECT_COLUMNS[DataContract.MAPOBJECT_NAME_COLUMN], situation.name);
 			values.put(DataContract.MAPOBJECT_COLUMNS[DataContract.MAPOBJECT_LATITUDE_COLUMN], situation.latitude);
 			values.put(DataContract.MAPOBJECT_COLUMNS[DataContract.MAPOBJECT_LONGITUDE_COLUMN], situation.longitude);
 			values.put(DataContract.MAPOBJECT_COLUMNS[DataContract.MAPOBJECT_BITMAP_COLUMN], bitmap);
+			// If this is a new object insert it
 			if (situation._id == 0)
 			{
 				Uri uri = contentProvider.insert(DataContract.MAPOBJECTS_URI, values);
 				situation._id = ContentUris.parseId(uri);
 			}
+			// Otherwise update it
 			else
 			{
 				Uri uri = ContentUris.withAppendedId(DataContract.MAPOBJECTS_URI, situation._id);
@@ -421,7 +425,7 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 
 	private void connect()
 	{
-		bindService(new Intent("com.androzic.location"), locationConnection, BIND_AUTO_CREATE);
+		bindService(new Intent(BaseLocationService.ANDROZIC_LOCATION_SERVICE), locationConnection, BIND_AUTO_CREATE);
 	}
 
 	private void disconnect()

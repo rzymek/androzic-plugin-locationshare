@@ -1,8 +1,12 @@
 package com.androzic.plugin.locationshare;
 
+import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import net.londatiga.android.ActionItem;
+import net.londatiga.android.QuickAction;
+import net.londatiga.android.QuickAction.OnActionItemClickListener;
 import android.app.ActivityManager;
 import android.app.ActivityManager.RunningServiceInfo;
 import android.app.ListActivity;
@@ -14,6 +18,10 @@ import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.content.res.Resources;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.preference.PreferenceManager;
@@ -26,10 +34,12 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.ListView;
+import android.widget.PopupWindow;
 import android.widget.TextView;
 import android.widget.ToggleButton;
 
 import com.androzic.data.Situation;
+import com.androzic.navigation.BaseNavigationService;
 import com.androzic.util.Geo;
 import com.androzic.util.StringFormatter;
 
@@ -44,6 +54,13 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 	// private int timeoutInterval = 600; // 10 minutes (default)
 
 	private ToggleButton toggle;
+
+	private static final int qaTrackerVisible = 1;
+	private static final int qaTrackerNavigate = 2;
+	
+    private QuickAction quickAction;
+	private int selectedPosition = -1;
+	private Drawable selectedBackground;
 
 	@Override
 	public void onCreate(final Bundle savedInstanceState)
@@ -62,6 +79,26 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 		SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
 		onSharedPreferenceChanged(sharedPreferences, null);
 		sharedPreferences.registerOnSharedPreferenceChangeListener(this);
+
+		// Prepare quick actions menu
+		Resources resources = getResources();
+		quickAction = new QuickAction(this);
+		quickAction.addActionItem(new ActionItem(qaTrackerVisible, getString(R.string.menu_view), resources.getDrawable(R.drawable.ic_menu_eye)));
+		quickAction.addActionItem(new ActionItem(qaTrackerNavigate, getString(R.string.menu_navigate), resources.getDrawable(R.drawable.ic_menu_directions)));
+
+		quickAction.setOnActionItemClickListener(situationActionItemClickListener);
+		quickAction.setOnDismissListener(new PopupWindow.OnDismissListener() {			
+			@Override
+			public void onDismiss()
+			{
+				View v = getListView().findViewWithTag("selected");
+				if (v != null)
+				{
+					v.setBackgroundDrawable(selectedBackground);
+					v.setTag(null);
+				}
+			}
+		});
 
 		adapter = new SituationListAdapter(this);
 		setListAdapter(adapter);
@@ -114,12 +151,11 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 	@Override
 	protected void onListItemClick(ListView l, View v, int position, long id)
 	{
-		Situation situation = adapter.getItem(position);
-		Log.d(TAG, "Passing coordinates to Androzic");
-		Intent i = new Intent("com.androzic.CENTER_ON_COORDINATES");
-		i.putExtra("lat", situation.latitude);
-		i.putExtra("lon", situation.longitude);
-		sendBroadcast(i);
+		v.setTag("selected");
+		selectedPosition = position;
+		selectedBackground = v.getBackground();
+		v.setBackgroundResource(R.drawable.list_selector_background_focus);
+		quickAction.show(v);
 	}
 
 	public void onToggleEnable(View view)
@@ -173,6 +209,50 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 		return false;
 	}
 
+	private OnActionItemClickListener situationActionItemClickListener = new OnActionItemClickListener(){
+		@Override
+		public void onItemClick(QuickAction source, int pos, int actionId)
+		{
+			Situation situation = adapter.getItem(selectedPosition);
+	
+	    	switch (actionId)
+	    	{
+	    		case qaTrackerVisible:
+					Log.d(TAG, "Passing coordinates to Androzic");
+					Intent i = new Intent("com.androzic.CENTER_ON_COORDINATES");
+					i.putExtra("lat", situation.latitude);
+					i.putExtra("lon", situation.longitude);
+					sendBroadcast(i);
+					break;
+				case qaTrackerNavigate:
+					/*
+					Intent intent = new Intent(BaseNavigationService.ANDROZIC_NAVIGATION_SERVICE);
+					intent.setAction(BaseNavigationService.NAVIGATE_MAPOBJECT_WITH_ID);
+					intent.putExtra(BaseNavigationService.EXTRA_ID, situation._id);
+					ComponentName cn = startService(intent);
+					Log.e(TAG, cn.flattenToString());
+					*/
+					
+					PackageManager packageManager = getPackageManager();
+					Intent serviceIntent = new Intent(BaseNavigationService.ANDROZIC_NAVIGATION_SERVICE);
+					List<ResolveInfo> services = packageManager.queryIntentServices(serviceIntent, 0);
+					if (services.size() > 0)
+					{
+						ResolveInfo service = services.get(0);
+						Intent intent = new Intent();
+						intent.setClassName(service.serviceInfo.packageName, service.serviceInfo.name);
+						intent.setAction(BaseNavigationService.NAVIGATE_MAPOBJECT_WITH_ID);
+						intent.putExtra(BaseNavigationService.EXTRA_ID, situation._id);
+						startService(intent);
+					}
+					finish();
+					break;
+	    	}
+	    	
+	    	selectedPosition = -1;
+		}
+	};
+
 	private ServiceConnection sharingConnection = new ServiceConnection() {
 		public void onServiceConnected(ComponentName className, IBinder service)
 		{
@@ -204,7 +284,6 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 		@Override
 		public void onReceive(Context context, Intent intent)
 		{
-			Log.e(TAG, "Broadcast: " + intent.getAction());
 			if (intent.getAction().equals(SharingService.BROADCAST_SITUATION_CHANGED))
 			{
 				runOnUiThread(new Runnable() {
@@ -268,6 +347,9 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 				// TODO Have to utilize view
 				v = mInflater.inflate(mItemLayout, parent, false);
 			}
+			if (position == selectedPosition)
+				v.setBackgroundResource(R.drawable.list_selector_background_focus);
+
 			Situation stn = getItem(position);
 			if (stn != null && sharingService != null)
 			{
