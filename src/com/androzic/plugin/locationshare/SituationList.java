@@ -83,8 +83,8 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 		// Prepare quick actions menu
 		Resources resources = getResources();
 		quickAction = new QuickAction(this);
-		quickAction.addActionItem(new ActionItem(qaTrackerVisible, getString(R.string.menu_view), resources.getDrawable(R.drawable.ic_menu_eye)));
-		quickAction.addActionItem(new ActionItem(qaTrackerNavigate, getString(R.string.menu_navigate), resources.getDrawable(R.drawable.ic_menu_directions)));
+		quickAction.addActionItem(new ActionItem(qaTrackerVisible, getString(R.string.menu_view), resources.getDrawable(R.drawable.ic_action_show)));
+		quickAction.addActionItem(new ActionItem(qaTrackerNavigate, getString(R.string.menu_navigate), resources.getDrawable(R.drawable.ic_action_directions)));
 
 		quickAction.setOnActionItemClickListener(situationActionItemClickListener);
 		quickAction.setOnDismissListener(new PopupWindow.OnDismissListener() {			
