@@ -310,27 +310,39 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 		public Situation getItem(int position)
 		{
 			if (sharingService != null)
-				return sharingService.situationList.get(position);
-			else
-				return null;
+			{
+				synchronized (sharingService.situationList)
+				{
+					return sharingService.situationList.get(position);
+				}
+			}
+			return null;
 		}
 
 		@Override
 		public long getItemId(int position)
 		{
 			if (sharingService != null)
-				return sharingService.situationList.get(position)._id;
-			else
-				return Integer.MIN_VALUE + position;
+			{
+				synchronized (sharingService.situationList)
+				{
+					return sharingService.situationList.get(position)._id;
+				}
+			}
+			return Integer.MIN_VALUE + position;
 		}
 
 		@Override
 		public int getCount()
 		{
 			if (sharingService != null)
-				return sharingService.situationList.size();
-			else
-				return 0;
+			{
+				synchronized (sharingService.situationList)
+				{
+					return sharingService.situationList.size();
+				}
+			}
+			return 0;
 		}
 
 		@Override

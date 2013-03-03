@@ -195,16 +195,23 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 
 	private void clearSituations()
 	{
-		String[] args = new String[situationList.size()];
-		int i = 0;
-		for (Situation situation : situationList)
+		String[] args = null;
+		synchronized (situationList)
 		{
-			args[i] = String.valueOf(situation._id);
-			i++;
+			args = new String[situationList.size()];
+			int i = 0;
+			for (Situation situation : situationList)
+			{
+				args[i] = String.valueOf(situation._id);
+				i++;
+			}
 		}
 		synchronized (situations)
 		{
-			situationList.clear();
+			synchronized (situationList)
+			{
+				situationList.clear();
+			}
 			situations.clear();
 		}
 		// Remove situations from map
@@ -270,7 +277,10 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 								{
 									s = new Situation(name);
 									situations.put(name, s);
-									situationList.add(s);
+									synchronized (situationList)
+									{
+										situationList.add(s);
+									}
 								}
 								s.latitude = situation.getDouble("lat");
 								s.longitude = situation.getDouble("lon");
@@ -330,8 +340,11 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 					e.printStackTrace();
 				}
 
-				notification.icon = R.drawable.ic_stat_sharing;
-				nm.notify(NOTIFICATION_ID, notification);
+				if (notification != null)
+				{
+					notification.icon = R.drawable.ic_stat_sharing;
+					nm.notify(NOTIFICATION_ID, notification);
+				}
 			}
 		});
 	}
@@ -361,29 +374,32 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 
 	private void sendMapObjects() throws RemoteException
 	{
-		for (Situation situation : situationList)
+		synchronized (situationList)
 		{
-			byte[] bitmap = getSituationBitmap(situation);
-			ContentValues values = new ContentValues();
-			// Name is not required if bitmap is used, but we need it for navigation service.
-			// See SituationList for navigation initiation code.
-			values.put(DataContract.MAPOBJECT_COLUMNS[DataContract.MAPOBJECT_NAME_COLUMN], situation.name);
-			values.put(DataContract.MAPOBJECT_COLUMNS[DataContract.MAPOBJECT_LATITUDE_COLUMN], situation.latitude);
-			values.put(DataContract.MAPOBJECT_COLUMNS[DataContract.MAPOBJECT_LONGITUDE_COLUMN], situation.longitude);
-			values.put(DataContract.MAPOBJECT_COLUMNS[DataContract.MAPOBJECT_BITMAP_COLUMN], bitmap);
-			// If this is a new object insert it
-			if (situation._id == 0)
+			for (Situation situation : situationList)
 			{
-				Uri uri = contentProvider.insert(DataContract.MAPOBJECTS_URI, values);
-				situation._id = ContentUris.parseId(uri);
-				if (notifyNewSituation)
-					sendNewSituationNotification(situation);
-			}
-			// Otherwise update it
-			else
-			{
-				Uri uri = ContentUris.withAppendedId(DataContract.MAPOBJECTS_URI, situation._id);
-				contentProvider.update(uri, values, null, null);
+				byte[] bitmap = getSituationBitmap(situation);
+				ContentValues values = new ContentValues();
+				// Name is not required if bitmap is used, but we need it for navigation service.
+				// See SituationList for navigation initiation code.
+				values.put(DataContract.MAPOBJECT_COLUMNS[DataContract.MAPOBJECT_NAME_COLUMN], situation.name);
+				values.put(DataContract.MAPOBJECT_COLUMNS[DataContract.MAPOBJECT_LATITUDE_COLUMN], situation.latitude);
+				values.put(DataContract.MAPOBJECT_COLUMNS[DataContract.MAPOBJECT_LONGITUDE_COLUMN], situation.longitude);
+				values.put(DataContract.MAPOBJECT_COLUMNS[DataContract.MAPOBJECT_BITMAP_COLUMN], bitmap);
+				// If this is a new object insert it
+				if (situation._id == 0)
+				{
+					Uri uri = contentProvider.insert(DataContract.MAPOBJECTS_URI, values);
+					situation._id = ContentUris.parseId(uri);
+					if (notifyNewSituation)
+						sendNewSituationNotification(situation);
+				}
+				// Otherwise update it
+				else
+				{
+					Uri uri = ContentUris.withAppendedId(DataContract.MAPOBJECTS_URI, situation._id);
+					contentProvider.update(uri, values, null, null);
+				}
 			}
 		}
 	}
@@ -434,7 +450,10 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 	private void removeMapObject(String name)
 	{
 		Situation situation = situations.get(name);
-		situationList.remove(situation);
+		synchronized (situationList)
+		{
+			situationList.remove(situation);
+		}
 		synchronized (situations)
 		{
 			situations.remove(name);
