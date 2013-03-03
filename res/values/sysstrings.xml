@@ -4,6 +4,7 @@
 	<string name="pref_sharing_user" translatable="false">sharing_user</string>
 	<string name="pref_sharing_updateinterval" translatable="false">sharing_updateinterval</string>
 	<string name="pref_sharing_timeout" translatable="false">sharing_timeout</string>
+	<string name="pref_sharing_notifications" translatable="false">sharing_notifications</string>
 	<string name="pref_sharing_tagcolor" translatable="false">sharing_tagcolor</string>
 	<string name="pref_sharing_tagwidth" translatable="false">sharing_tagwidth</string>
 </resources>

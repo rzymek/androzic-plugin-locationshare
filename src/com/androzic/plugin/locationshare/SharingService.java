@@ -79,6 +79,7 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 	private boolean errorState = false;
 	private boolean sharingEnabled = false;
 	private boolean isSuspended = false;
+	private boolean notifyNewSituation = false;
 
 	private Notification notification;
 	private PendingIntent contentIntent;
@@ -148,6 +149,7 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 		onSharedPreferenceChanged(sharedPreferences, getString(R.string.pref_sharing_session));
 		onSharedPreferenceChanged(sharedPreferences, getString(R.string.pref_sharing_user));
 		onSharedPreferenceChanged(sharedPreferences, getString(R.string.pref_sharing_updateinterval));
+		onSharedPreferenceChanged(sharedPreferences, getString(R.string.pref_sharing_notifications));
 		onSharedPreferenceChanged(sharedPreferences, getString(R.string.pref_sharing_tagcolor));
 		onSharedPreferenceChanged(sharedPreferences, getString(R.string.pref_sharing_tagcolor));
 		onSharedPreferenceChanged(sharedPreferences, getString(R.string.pref_sharing_tagwidth));
@@ -334,6 +336,29 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 		});
 	}
 
+	protected void sendNewSituationNotification(Situation situation)
+	{
+		Intent i = new Intent("com.androzic.COORDINATES_RECEIVED");
+		i.putExtra("title", session);
+		i.putExtra("sender", situation.name);
+		i.putExtra("origin", getApplicationContext().getPackageName());
+		i.putExtra("lat", situation.latitude);
+		i.putExtra("lon", situation.longitude);
+		PendingIntent pendingIntent = PendingIntent.getBroadcast(this, (int) situation._id, i, PendingIntent.FLAG_ONE_SHOT);
+
+		String msg = getString(R.string.notif_newsession, situation.name);
+		
+		Notification newNotification = new Notification();
+		newNotification.when = situation.time;
+		newNotification.icon = R.drawable.ic_stat_sharing;
+		newNotification.defaults = Notification.DEFAULT_SOUND;
+		newNotification.flags = Notification.FLAG_AUTO_CANCEL;
+		newNotification.tickerText = msg;
+		newNotification.setLatestEventInfo(getApplicationContext(), getText(R.string.app_name), msg, pendingIntent);
+		NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+		notificationManager.notify((int) situation._id, newNotification);
+	}
+
 	private void sendMapObjects() throws RemoteException
 	{
 		for (Situation situation : situationList)
@@ -351,6 +376,8 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 			{
 				Uri uri = contentProvider.insert(DataContract.MAPOBJECTS_URI, values);
 				situation._id = ContentUris.parseId(uri);
+				if (notifyNewSituation)
+					sendNewSituationNotification(situation);
 			}
 			// Otherwise update it
 			else
@@ -615,6 +642,10 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 				stopTimer();
 				startTimer();
 			}
+		}
+		else if (getString(R.string.pref_sharing_notifications).equals(key))
+		{
+			notifyNewSituation = sharedPreferences.getBoolean(key, getResources().getBoolean(R.bool.def_notifications));
 		}
 		else if (getString(R.string.pref_sharing_tagcolor).equals(key))
 		{
