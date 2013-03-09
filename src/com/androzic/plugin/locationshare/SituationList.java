@@ -1,6 +1,5 @@
 package com.androzic.plugin.locationshare;
 
-import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -18,8 +17,6 @@ import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
-import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
 import android.content.res.Resources;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
@@ -225,26 +222,9 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 					sendBroadcast(i);
 					break;
 				case qaTrackerNavigate:
-					/*
-					Intent intent = new Intent(BaseNavigationService.ANDROZIC_NAVIGATION_SERVICE);
-					intent.setAction(BaseNavigationService.NAVIGATE_MAPOBJECT_WITH_ID);
+					Intent intent = new Intent(BaseNavigationService.NAVIGATE_MAPOBJECT_WITH_ID);
 					intent.putExtra(BaseNavigationService.EXTRA_ID, situation._id);
-					ComponentName cn = startService(intent);
-					Log.e(TAG, cn.flattenToString());
-					*/
-					
-					PackageManager packageManager = getPackageManager();
-					Intent serviceIntent = new Intent(BaseNavigationService.ANDROZIC_NAVIGATION_SERVICE);
-					List<ResolveInfo> services = packageManager.queryIntentServices(serviceIntent, 0);
-					if (services.size() > 0)
-					{
-						ResolveInfo service = services.get(0);
-						Intent intent = new Intent();
-						intent.setClassName(service.serviceInfo.packageName, service.serviceInfo.name);
-						intent.setAction(BaseNavigationService.NAVIGATE_MAPOBJECT_WITH_ID);
-						intent.putExtra(BaseNavigationService.EXTRA_ID, situation._id);
-						startService(intent);
-					}
+					startService(intent);
 					finish();
 					break;
 	    	}
