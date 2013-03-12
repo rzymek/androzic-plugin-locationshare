@@ -7,7 +7,10 @@
   <string name="msg_empty_list">Görüntülenecek konum paylaşım verisi bulunmuyor</string>
   <string name="notif_sharing">Androzic konumunuzu gerçek zamanlı olarak paylaşıyor</string>
   <string name="notif_error">Androzic konum paylaşımı başarısız</string>
+  <string name="notif_newsession">%s oturuma katıldı</string>
   <string name="menu_preferences">Ayarlar</string>
+  <string name="menu_view">Göster</string>
+  <string name="menu_navigate">Seyrüsefer</string>
   <string name="pref_sharing_title">Konum paylaşımı</string>
   <string name="pref_sharing_session_title">Oturum başlığı</string>
   <string name="pref_sharing_session_summary">Oturum adının o gruptaki tüm kullanıcılar için aynı olması gerekmektedir ve istenmeyen kullanıcıların bu gruba katılmasını engellemek için gizli olmalıdır</string>
@@ -17,6 +20,7 @@
   <string name="pref_sharing_updateinterval_summary">Saniye cinsinden konum bilgisinin gönderilip alındığı zaman aralığı</string>
   <string name="pref_sharing_timeout_title">Konum zaman aşımı</string>
   <string name="pref_sharing_timeout_summary">Bu süre sonunda kullanıcı kayıp olarak görüntülenecektir</string>
+  <string name="pref_sharing_notifications_title">Yeni kullanıcı bildirimi</string>
   <string name="pref_sharing_tagcolor_title">Etiket rengi</string>
   <string name="pref_sharing_tagwidth_title">Etiket boyutu</string>
   <string name="pref_sharing_tagwidth_summary">Etiket işaretçisinin piksel boyutu</string>

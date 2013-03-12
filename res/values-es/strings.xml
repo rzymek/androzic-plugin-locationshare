@@ -7,7 +7,10 @@
   <string name="msg_empty_list">Nada que mostrar</string>
   <string name="notif_sharing">Androzic está compartiendo la ubicación en tiempo real</string>
   <string name="notif_error">Androzic es incapaz de compartir la ubicación</string>
+  <string name="notif_newsession">%s se ha unido a la sesión</string>
   <string name="menu_preferences">Configuración</string>
+  <string name="menu_view">Ver</string>
+  <string name="menu_navigate">Navegar</string>
   <string name="pref_sharing_title">Ubicación compartida</string>
   <string name="pref_sharing_session_title">Título de la sesión</string>
   <string name="pref_sharing_session_summary">Cadena única que identifica una sesión, debe ser la misma para todos los usuarios en un grupo y debe ser secreta para no permitir que usuarios no deseados se unan a este grupo</string>
@@ -17,6 +20,7 @@
   <string name="pref_sharing_updateinterval_summary">Intervalo de tiempo en segundos en el que los datos de ubicación se envían y reciben</string>
   <string name="pref_sharing_timeout_title">Tiempo de espera de ubicación</string>
   <string name="pref_sharing_timeout_summary">Tiempo tras el cual se mostrará al usuario como perdido</string>
+  <string name="pref_sharing_notifications_title">Notificación de nuevo usuario</string>
   <string name="pref_sharing_tagcolor_title">Color de etiqueta</string>
   <string name="pref_sharing_tagwidth_title">Tamaño de etiqueta</string>
   <string name="pref_sharing_tagwidth_summary">El tamaño en píxeles del marcador de etiqueta</string>
