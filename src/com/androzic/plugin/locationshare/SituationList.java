@@ -136,9 +136,7 @@ public class SituationList extends ListActivity implements OnSharedPreferenceCha
 	@Override
 	public boolean onOptionsItemSelected(final MenuItem item)
 	{
-		switch (item.getItemId())
-		{
-			case R.id.menuPreferences:
+		if(item.getItemId() == R.id.menuPreferences) {
 				startActivity(new Intent(this, Preferences.class));
 				return true;
 		}
