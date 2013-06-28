@@ -15,7 +15,13 @@
         android:singleLine="true"
         android:summary="@string/pref_sharing_user_summary"
         android:title="@string/pref_sharing_user_title" />
-
+    <com.androzic.ui.preference.HelpfulEditTextPreference
+        android:key="@string/pref_sharing_url"
+        android:maxLength="120"
+        android:singleLine="true"
+        android:summary="@string/pref_sharing_url_summary"
+        android:title="@string/pref_sharing_url_title" />
+    
     <com.androzic.ui.preference.HelpfulSeekbarPreference
         android:key="@string/pref_sharing_updateinterval"
         android:summary="@string/pref_sharing_updateinterval_summary"
