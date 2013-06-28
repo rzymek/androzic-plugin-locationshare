@@ -92,6 +92,7 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 	Location currentLocation = new Location("fake");
 	String session;
 	String user;
+	String url;
 	private int updateInterval = 10000; // 10 seconds (default)
 	int timeoutInterval = 600000; // 10 minutes (default)
 	long timeCorrection = 0;
@@ -248,7 +249,7 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 						query = "session=" + URLEncoder.encode(session) + ";user=" + URLEncoder.encode(user) + ";lat=" + currentLocation.getLatitude() + ";lon=" + currentLocation.getLongitude()
 								+ ";track=" + currentLocation.getBearing() + ";speed=" + currentLocation.getSpeed() + ";ftime=" + currentLocation.getTime();
 					}
-					URL = new URI("http", null, "androzic.com", 80, "/cgi-bin/loc.cgi", query, null);
+					URL = new URI("http", null, url, 80, "/cgi-bin/loc.cgi", query, null);
 
 					HttpClient httpclient = new DefaultHttpClient();
 					HttpResponse response = httpclient.execute(new HttpGet(URL));
@@ -644,6 +645,7 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 	{
 		String oldsession = session;
 		String olduser = user;
+		String oldurl = url;
 
 		if (getString(R.string.pref_sharing_session).equals(key))
 		{
@@ -652,6 +654,10 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 		else if (getString(R.string.pref_sharing_user).equals(key))
 		{
 			user = sharedPreferences.getString(key, "");
+		}
+		else if (getString(R.string.pref_sharing_url).equals(key))
+		{
+			url = sharedPreferences.getString(key, "androzic.com");
 		}
 		else if (getString(R.string.pref_sharing_updateinterval).equals(key))
 		{
@@ -683,7 +689,7 @@ public class SharingService extends Service implements OnSharedPreferenceChangeL
 			timeoutInterval = sharedPreferences.getInt(key, getResources().getInteger(R.integer.def_sharing_timeout)) * 60000;
 		}
 
-		if (!session.equals(oldsession) || !user.equals(olduser))
+		if (!session.equals(oldsession) || !user.equals(olduser) || !url.equals(oldurl))
 		{
 			clearSituations();
 		}

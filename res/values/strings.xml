@@ -14,6 +14,8 @@
     <string name="pref_sharing_title">Location sharing</string>
     <string name="pref_sharing_session_title">Session title</string>
     <string name="pref_sharing_session_summary">Unique string identifying a session, it must be the same for all users in a group and must be secret to not let unwanted users join this group</string>
+    <string name="pref_sharing_url_title">Sharing server</string>
+    <string name="pref_sharing_url_summary">Name and port of the server which received location sharing events</string>
     <string name="pref_sharing_user_title">User identifier</string>
     <string name="pref_sharing_user_summary">Unique string identifying a user within a session group</string>
     <string name="pref_sharing_updateinterval_title">Update interval</string>
